@@ -5,11 +5,11 @@ Module.register("MMM-EnphaseBattery", {
         systemId: "",
         updateInterval: 5 * 60 * 1000,
         animationSpeed: 1000,
-        showLastUpdate: true,
+        showLastUpdate: false,
         showBatteryIcon: true,
-        showCapacity: true,
+        showCapacity: false,
         showDevicesReporting: false,
-        debug: true
+        debug: false
     },
 
     start: function() {
