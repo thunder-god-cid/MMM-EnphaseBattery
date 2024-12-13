@@ -1,138 +1,114 @@
-Module.register("MMM-EnphaseBattery", {
-    defaults: {
-        apiKey: "",
-        accessToken: "",  // OAuth access token
-        systemId: "",
-        updateInterval: 5 * 60 * 1000,
-        animationSpeed: 1000,
-        showLastUpdate: true,
-        showBatteryIcon: true,
-        showCapacity: true,
-        showDevicesReporting: false,
-        debug: true
-    },
+const NodeHelper = require("node_helper");
+const axios = require("axios");
 
+module.exports = NodeHelper.create({
     start: function() {
-        Log.info("MMM-EnphaseBattery: Starting module");
-        this.loaded = false;
-        this.batteryData = null;
-        this.lastUpdate = null;
-        this.errorMessage = null;
-        
-        Log.info("MMM-EnphaseBattery: Configuration loaded");
-        this.sendSocketNotification("ENPHASE_CONFIG", this.config);
-        this.scheduleUpdate();
-    },
-
-    scheduleUpdate: function() {
-        Log.info("MMM-EnphaseBattery: Scheduling updates");
-        setInterval(() => {
-            this.sendSocketNotification("GET_BATTERY_DATA");
-        }, this.config.updateInterval);
-        
-        this.sendSocketNotification("GET_BATTERY_DATA");
+        console.log("MMM-EnphaseBattery: Starting node helper");
+        this.config = null;
     },
 
     socketNotificationReceived: function(notification, payload) {
-        Log.debug("MMM-EnphaseBattery: Received socket notification:", notification);
+        console.log("MMM-EnphaseBattery: Node helper received notification:", notification);
         
-        if (notification === "BATTERY_DATA") {
-            if (payload.error) {
-                Log.error("MMM-EnphaseBattery: Error received:", payload.error);
-                this.errorMessage = payload.error;
-            } else {
-                Log.info("MMM-EnphaseBattery: Received battery data:", payload);
-                this.batteryData = payload;
-                this.errorMessage = null;
+        if (notification === "ENPHASE_CONFIG") {
+            this.config = payload;
+        } else if (notification === "GET_BATTERY_DATA") {
+            if (!this.config) {
+                console.error("MMM-EnphaseBattery: No configuration available");
+                this.sendSocketNotification("BATTERY_DATA", { 
+                    error: "Module not configured" 
+                });
+                return;
             }
-            this.lastUpdate = new Date();
-            this.loaded = true;
-            this.updateDom(this.config.animationSpeed);
+            this.fetchBatteryData();
         }
     },
 
-    getDom: function() {
-        const wrapper = document.createElement("div");
-        wrapper.className = "MMM-EnphaseBattery";
+    fetchBatteryData: async function() {
+        try {
+            // Get battery telemetry data
+            const telemetryUrl = `https://api.enphaseenergy.com/api/v4/systems/${this.config.systemId}/telemetry/battery`;
+            console.log("MMM-EnphaseBattery: Making telemetry API request to:", telemetryUrl);
 
-        if (!this.loaded) {
-            wrapper.innerHTML = "Loading battery data...";
-            return wrapper;
-        }
+            const telemetryResponse = await axios.get(telemetryUrl, {
+                headers: {
+                    'Accept': 'application/json',
+                    'Authorization': `Bearer ${this.config.accessToken}`,
+                    'key': this.config.apiKey
+                },
+                params: {
+                    granularity: 'day'  // Get latest day's data
+                }
+            });
 
-        if (this.errorMessage) {
-            wrapper.innerHTML = `Error: ${this.errorMessage}`;
-            wrapper.className += " error";
-            return wrapper;
-        }
+            // Get system summary for additional battery info
+            const summaryUrl = `https://api.enphaseenergy.com/api/v4/systems/${this.config.systemId}/summary`;
+            console.log("MMM-EnphaseBattery: Making summary API request to:", summaryUrl);
 
-        const container = document.createElement("div");
-        container.className = "battery-container";
+            const summaryResponse = await axios.get(summaryUrl, {
+                headers: {
+                    'Accept': 'application/json',
+                    'Authorization': `Bearer ${this.config.accessToken}`,
+                    'key': this.config.apiKey
+                }
+            });
 
-        // Battery State of Charge
-        if (this.batteryData.battery_soc !== null) {
-            const soc = document.createElement("div");
-            soc.className = "battery-soc";
+            // Process the telemetry data
+            const telemetryData = telemetryResponse.data;
+            const summaryData = summaryResponse.data;
             
-            // Add battery icon if enabled
-            if (this.config.showBatteryIcon) {
-                const batteryLevel = Math.floor(this.batteryData.battery_soc / 20); // 0-5 levels
-                soc.innerHTML = `<span class="fa fa-battery-${batteryLevel}"></span> `;
+            // Get the most recent interval from telemetry data
+            const latestInterval = telemetryData.intervals[telemetryData.intervals.length - 1];
+            
+            const batteryData = {
+                battery_soc: latestInterval.soc ? latestInterval.soc.percent : null,
+                battery_power: {
+                    charge: latestInterval.charge ? latestInterval.charge.enwh : 0,
+                    discharge: latestInterval.discharge ? latestInterval.discharge.enwh : 0
+                },
+                battery_capacity_wh: summaryData.battery_capacity_wh || null,
+                last_report_at: telemetryData.meta ? telemetryData.meta.last_report_at : null,
+                devices_reporting: {
+                    charge: latestInterval.charge ? latestInterval.charge.devices_reporting : 0,
+                    discharge: latestInterval.discharge ? latestInterval.discharge.devices_reporting : 0
+                }
+            };
+
+            console.log("MMM-EnphaseBattery: Processed battery data:", batteryData);
+            this.sendSocketNotification("BATTERY_DATA", batteryData);
+
+        } catch (error) {
+            console.error("MMM-EnphaseBattery: API request failed:", {
+                message: error.message,
+                response: error.response ? {
+                    status: error.response.status,
+                    data: error.response.data
+                } : 'No response'
+            });
+
+            let errorMessage = "API Error";
+            if (error.response) {
+                switch (error.response.status) {
+                    case 401:
+                        errorMessage = "Invalid API credentials";
+                        break;
+                    case 403:
+                        errorMessage = "Access forbidden - check API permissions";
+                        break;
+                    case 404:
+                        errorMessage = "System ID not found";
+                        break;
+                    case 422:
+                        errorMessage = "Invalid parameters - check system configuration";
+                        break;
+                    default:
+                        errorMessage = `API Error: ${error.message}`;
+                }
             }
-            
-            soc.innerHTML += `${this.batteryData.battery_soc}%`;
-            container.appendChild(soc);
+
+            this.sendSocketNotification("BATTERY_DATA", { 
+                error: errorMessage
+            });
         }
-
-        // Battery Power
-        const power = document.createElement("div");
-        power.className = "battery-power";
-        
-        if (this.batteryData.battery_power.charge > 0) {
-            power.innerHTML = `Charging: ${this.batteryData.battery_power.charge}Wh`;
-        } else if (this.batteryData.battery_power.discharge > 0) {
-            power.innerHTML = `Discharging: ${this.batteryData.battery_power.discharge}Wh`;
-        } else {
-            power.innerHTML = "Idle";
-        }
-        container.appendChild(power);
-
-        // Battery Capacity
-        if (this.config.showCapacity && this.batteryData.battery_capacity_wh) {
-            const capacity = document.createElement("div");
-            capacity.className = "battery-capacity";
-            capacity.innerHTML = `Capacity: ${(this.batteryData.battery_capacity_wh / 1000).toFixed(1)}kWh`;
-            container.appendChild(capacity);
-        }
-
-        // Devices Reporting
-        if (this.config.showDevicesReporting) {
-            const devices = document.createElement("div");
-            devices.className = "devices-reporting";
-            devices.innerHTML = `Batteries reporting: ${Math.max(
-                this.batteryData.devices_reporting.charge,
-                this.batteryData.devices_reporting.discharge
-            )}`;
-            container.appendChild(devices);
-        }
-
-        // Last Update
-        if (this.config.showLastUpdate && this.batteryData.last_report_at) {
-            const update = document.createElement("div");
-            update.className = "battery-update";
-            const lastReport = new Date(this.batteryData.last_report_at * 1000);
-            update.innerHTML = `Updated: ${lastReport.toLocaleTimeString()}`;
-            container.appendChild(update);
-        }
-
-        wrapper.appendChild(container);
-        return wrapper;
-    },
-
-    getStyles: function() {
-        return [
-            'font-awesome.css',
-            'MMM-EnphaseBattery.css'
-        ];
     }
 });
