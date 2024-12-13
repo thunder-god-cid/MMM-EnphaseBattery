@@ -1,4 +1,3 @@
-/* MMM-EnphaseBattery/node_helper.js */
 const NodeHelper = require("node_helper");
 const axios = require("axios");
 
@@ -27,10 +26,11 @@ module.exports = NodeHelper.create({
 
     fetchBatteryData: async function() {
         try {
-            const url = `https://api.enphaseenergy.com/api/v4/systems/${this.config.systemId}/latest_telemetry`;
-            console.log("MMM-EnphaseBattery: Making API request to:", url);
+            // First get system summary to get battery info
+            const summaryUrl = `https://api.enphaseenergy.com/api/v4/systems/${this.config.systemId}/summary`;
+            console.log("MMM-EnphaseBattery: Making summary API request to:", summaryUrl);
 
-            const response = await axios.get(url, {
+            const summaryResponse = await axios.get(summaryUrl, {
                 headers: {
                     'Accept': 'application/json',
                     'Authorization': `Bearer ${this.config.accessToken}`,
@@ -38,16 +38,30 @@ module.exports = NodeHelper.create({
                 }
             });
 
-            console.log("MMM-EnphaseBattery: Raw API response:", response.data);
+            // Then get live status data
+            const statusUrl = `https://api.enphaseenergy.com/api/v4/systems/${this.config.systemId}/live_data`;
+            console.log("MMM-EnphaseBattery: Making status API request to:", statusUrl);
 
-            // Process the data from v4 API format
-            const telemetryData = response.data.data.data;
+            const statusResponse = await axios.get(statusUrl, {
+                headers: {
+                    'Accept': 'application/json',
+                    'Authorization': `Bearer ${this.config.accessToken}`,
+                    'key': this.config.apiKey,
+                    'duration': '30'  // Minimum duration required by API
+                }
+            });
+
+            // Process the combined data
+            const summaryData = summaryResponse.data;
+            const statusData = statusResponse.data.data.data;
+
             const batteryData = {
-                status: telemetryData.grid_status,
-                battery_power: telemetryData.battery_power,
-                battery_soc: telemetryData.battery_soc,
-                grid_status: telemetryData.grid_status,
-                timestamp: telemetryData.timestamp_utc
+                status: statusData.grid_status || "Unknown",
+                battery_power: statusData.battery_power || 0,
+                battery_soc: statusData.battery_soc || 0,
+                grid_status: statusData.grid_status || "Unknown",
+                battery_capacity_wh: summaryData.battery_capacity_wh || 0,
+                timestamp: statusData.timestamp_utc || new Date().toISOString()
             };
 
             console.log("MMM-EnphaseBattery: Processed battery data:", batteryData);
@@ -73,6 +87,9 @@ module.exports = NodeHelper.create({
                         break;
                     case 404:
                         errorMessage = "System ID not found";
+                        break;
+                    case 422:
+                        errorMessage = "Invalid parameters - check system configuration";
                         break;
                     default:
                         errorMessage = `API Error: ${error.message}`;

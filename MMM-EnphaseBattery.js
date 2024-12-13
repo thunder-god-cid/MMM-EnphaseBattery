@@ -1,4 +1,3 @@
-/* MMM-EnphaseBattery/MMM-EnphaseBattery.js */
 Module.register("MMM-EnphaseBattery", {
     defaults: {
         apiKey: "",
@@ -9,6 +8,7 @@ Module.register("MMM-EnphaseBattery", {
         showStatus: true,
         showLastUpdate: true,
         showBatteryIcon: true,
+        showCapacity: true,
         debug: true
     },
 
@@ -69,12 +69,12 @@ Module.register("MMM-EnphaseBattery", {
         const container = document.createElement("div");
         container.className = "battery-container";
 
-        // Status
-        if (this.config.showStatus && this.batteryData.status) {
-            const status = document.createElement("div");
-            status.className = "battery-status";
-            status.innerHTML = `Status: ${this.batteryData.status}`;
-            container.appendChild(status);
+        // Grid Status
+        if (this.config.showStatus && this.batteryData.grid_status) {
+            const gridStatus = document.createElement("div");
+            gridStatus.className = "grid-status";
+            gridStatus.innerHTML = `Grid: ${this.batteryData.grid_status}`;
+            container.appendChild(gridStatus);
         }
 
         // Battery Power
@@ -91,8 +91,23 @@ Module.register("MMM-EnphaseBattery", {
         if (this.batteryData.battery_soc !== undefined) {
             const soc = document.createElement("div");
             soc.className = "battery-soc";
-            soc.innerHTML = `Charge: ${this.batteryData.battery_soc}%`;
+            
+            // Add battery icon if enabled
+            if (this.config.showBatteryIcon) {
+                const batteryLevel = Math.floor(this.batteryData.battery_soc / 20); // 0-5 levels
+                soc.innerHTML = `<span class="fa fa-battery-${batteryLevel}"></span> `;
+            }
+            
+            soc.innerHTML += `${this.batteryData.battery_soc}%`;
             container.appendChild(soc);
+        }
+
+        // Battery Capacity
+        if (this.config.showCapacity && this.batteryData.battery_capacity_wh) {
+            const capacity = document.createElement("div");
+            capacity.className = "battery-capacity";
+            capacity.innerHTML = `Capacity: ${(this.batteryData.battery_capacity_wh / 1000).toFixed(1)}kWh`;
+            container.appendChild(capacity);
         }
 
         // Last Update
@@ -105,5 +120,12 @@ Module.register("MMM-EnphaseBattery", {
 
         wrapper.appendChild(container);
         return wrapper;
+    },
+
+    getStyles: function() {
+        return [
+            'font-awesome.css',
+            'MMM-EnphaseBattery.css'
+        ];
     }
 });
