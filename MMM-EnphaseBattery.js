@@ -5,10 +5,10 @@ Module.register("MMM-EnphaseBattery", {
         systemId: "",
         updateInterval: 5 * 60 * 1000,
         animationSpeed: 1000,
-        showStatus: true,
         showLastUpdate: true,
         showBatteryIcon: true,
         showCapacity: true,
+        showDevicesReporting: false,
         debug: true
     },
 
@@ -69,26 +69,8 @@ Module.register("MMM-EnphaseBattery", {
         const container = document.createElement("div");
         container.className = "battery-container";
 
-        // Grid Status
-        if (this.config.showStatus && this.batteryData.grid_status) {
-            const gridStatus = document.createElement("div");
-            gridStatus.className = "grid-status";
-            gridStatus.innerHTML = `Grid: ${this.batteryData.grid_status}`;
-            container.appendChild(gridStatus);
-        }
-
-        // Battery Power
-        if (this.batteryData.battery_power !== undefined) {
-            const power = document.createElement("div");
-            power.className = "battery-power";
-            const powerValue = Math.abs(this.batteryData.battery_power);
-            const powerDirection = this.batteryData.battery_power > 0 ? "Charging" : "Discharging";
-            power.innerHTML = `${powerDirection}: ${powerValue}W`;
-            container.appendChild(power);
-        }
-
         // Battery State of Charge
-        if (this.batteryData.battery_soc !== undefined) {
+        if (this.batteryData.battery_soc !== null) {
             const soc = document.createElement("div");
             soc.className = "battery-soc";
             
@@ -102,6 +84,19 @@ Module.register("MMM-EnphaseBattery", {
             container.appendChild(soc);
         }
 
+        // Battery Power
+        const power = document.createElement("div");
+        power.className = "battery-power";
+        
+        if (this.batteryData.battery_power.charge > 0) {
+            power.innerHTML = `Charging: ${this.batteryData.battery_power.charge}Wh`;
+        } else if (this.batteryData.battery_power.discharge > 0) {
+            power.innerHTML = `Discharging: ${this.batteryData.battery_power.discharge}Wh`;
+        } else {
+            power.innerHTML = "Idle";
+        }
+        container.appendChild(power);
+
         // Battery Capacity
         if (this.config.showCapacity && this.batteryData.battery_capacity_wh) {
             const capacity = document.createElement("div");
@@ -110,11 +105,23 @@ Module.register("MMM-EnphaseBattery", {
             container.appendChild(capacity);
         }
 
+        // Devices Reporting
+        if (this.config.showDevicesReporting) {
+            const devices = document.createElement("div");
+            devices.className = "devices-reporting";
+            devices.innerHTML = `Batteries reporting: ${Math.max(
+                this.batteryData.devices_reporting.charge,
+                this.batteryData.devices_reporting.discharge
+            )}`;
+            container.appendChild(devices);
+        }
+
         // Last Update
-        if (this.config.showLastUpdate && this.lastUpdate) {
+        if (this.config.showLastUpdate && this.batteryData.last_report_at) {
             const update = document.createElement("div");
             update.className = "battery-update";
-            update.innerHTML = `Updated: ${this.lastUpdate.toLocaleTimeString()}`;
+            const lastReport = new Date(this.batteryData.last_report_at * 1000);
+            update.innerHTML = `Updated: ${lastReport.toLocaleTimeString()}`;
             container.appendChild(update);
         }
 
