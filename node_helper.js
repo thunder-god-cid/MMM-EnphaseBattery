@@ -1,3 +1,4 @@
+/* MMM-EnphaseBattery/node_helper.js */
 const NodeHelper = require("node_helper");
 const axios = require("axios");
 
@@ -12,11 +13,6 @@ module.exports = NodeHelper.create({
         
         if (notification === "ENPHASE_CONFIG") {
             this.config = payload;
-            console.log("MMM-EnphaseBattery: Configuration received", {
-                hasApiKey: !!this.config.apiKey,
-                hasUserId: !!this.config.userId,
-                hasSystemId: !!this.config.systemId
-            });
         } else if (notification === "GET_BATTERY_DATA") {
             if (!this.config) {
                 console.error("MMM-EnphaseBattery: No configuration available");
@@ -30,46 +26,28 @@ module.exports = NodeHelper.create({
     },
 
     fetchBatteryData: async function() {
-        console.log("MMM-EnphaseBattery: Fetching battery data");
-        
-        if (!this.config.apiKey || !this.config.userId || !this.config.systemId) {
-            console.error("MMM-EnphaseBattery: Missing required configuration");
-            this.sendSocketNotification("BATTERY_DATA", { 
-                error: "Missing API credentials" 
-            });
-            return;
-        }
-
         try {
-            const url = `https://api.enphaseenergy.com/api/v2/systems/${this.config.systemId}/summary`;
+            const url = `https://api.enphaseenergy.com/api/v4/systems/${this.config.systemId}/latest_telemetry`;
             console.log("MMM-EnphaseBattery: Making API request to:", url);
 
             const response = await axios.get(url, {
-                params: {
-                    key: this.config.apiKey,
-                    user_id: this.config.userId
-                },
                 headers: {
                     'Accept': 'application/json',
-                    'Authorization': `Bearer ${this.config.apiKey}`,
-                    'Content-Type': 'application/json'
+                    'Authorization': `Bearer ${this.config.accessToken}`,
+                    'key': this.config.apiKey
                 }
             });
 
-            if (response.status === 401) {
-                console.error("MMM-EnphaseBattery: Authentication failed. Please verify API credentials.");
-                this.sendSocketNotification("BATTERY_DATA", { 
-                    error: "Authentication failed. Please verify API credentials." 
-                });
-                return;
-            }
-
             console.log("MMM-EnphaseBattery: Raw API response:", response.data);
 
-            // Process the data
+            // Process the data from v4 API format
+            const telemetryData = response.data.data.data;
             const batteryData = {
-                status: response.data.status,
-                charge_level: this.calculateChargeLevel(response.data)
+                status: telemetryData.grid_status,
+                battery_power: telemetryData.battery_power,
+                battery_soc: telemetryData.battery_soc,
+                grid_status: telemetryData.grid_status,
+                timestamp: telemetryData.timestamp_utc
             };
 
             console.log("MMM-EnphaseBattery: Processed battery data:", batteryData);
@@ -80,8 +58,7 @@ module.exports = NodeHelper.create({
                 message: error.message,
                 response: error.response ? {
                     status: error.response.status,
-                    data: error.response.data,
-                    headers: error.response.headers
+                    data: error.response.data
                 } : 'No response'
             });
 
@@ -106,14 +83,5 @@ module.exports = NodeHelper.create({
                 error: errorMessage
             });
         }
-    },
-
-    calculateChargeLevel: function(data) {
-        console.log("MMM-EnphaseBattery: Raw data for charge calculation:", data);
-        // Adjust calculation based on actual API response structure
-        if (data.size_w && data.size_w > 0) {
-            return Math.round((data.energy_today / data.size_w) * 100);
-        }
-        return 0;
     }
 });
