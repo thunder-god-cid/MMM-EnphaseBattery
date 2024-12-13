@@ -26,7 +26,22 @@ module.exports = NodeHelper.create({
 
     fetchBatteryData: async function() {
         try {
-            // First get system summary to get battery info
+            // Get battery telemetry data
+            const telemetryUrl = `https://api.enphaseenergy.com/api/v4/systems/${this.config.systemId}/telemetry/battery`;
+            console.log("MMM-EnphaseBattery: Making telemetry API request to:", telemetryUrl);
+
+            const telemetryResponse = await axios.get(telemetryUrl, {
+                headers: {
+                    'Accept': 'application/json',
+                    'Authorization': `Bearer ${this.config.accessToken}`,
+                    'key': this.config.apiKey
+                },
+                params: {
+                    granularity: 'day'  // Get latest day's data
+                }
+            });
+
+            // Get system summary for additional battery info
             const summaryUrl = `https://api.enphaseenergy.com/api/v4/systems/${this.config.systemId}/summary`;
             console.log("MMM-EnphaseBattery: Making summary API request to:", summaryUrl);
 
@@ -38,30 +53,25 @@ module.exports = NodeHelper.create({
                 }
             });
 
-            // Then get live status data
-            const statusUrl = `https://api.enphaseenergy.com/api/v4/systems/${this.config.systemId}/live_data`;
-            console.log("MMM-EnphaseBattery: Making status API request to:", statusUrl);
-
-            const statusResponse = await axios.get(statusUrl, {
-                headers: {
-                    'Accept': 'application/json',
-                    'Authorization': `Bearer ${this.config.accessToken}`,
-                    'key': this.config.apiKey,
-                    'duration': '30'  // Minimum duration required by API
-                }
-            });
-
-            // Process the combined data
+            // Process the telemetry data
+            const telemetryData = telemetryResponse.data;
             const summaryData = summaryResponse.data;
-            const statusData = statusResponse.data.data.data;
-
+            
+            // Get the most recent interval from telemetry data
+            const latestInterval = telemetryData.intervals[telemetryData.intervals.length - 1];
+            
             const batteryData = {
-                status: statusData.grid_status || "Unknown",
-                battery_power: statusData.battery_power || 0,
-                battery_soc: statusData.battery_soc || 0,
-                grid_status: statusData.grid_status || "Unknown",
-                battery_capacity_wh: summaryData.battery_capacity_wh || 0,
-                timestamp: statusData.timestamp_utc || new Date().toISOString()
+                battery_soc: latestInterval.soc ? latestInterval.soc.percent : null,
+                battery_power: {
+                    charge: latestInterval.charge ? latestInterval.charge.enwh : 0,
+                    discharge: latestInterval.discharge ? latestInterval.discharge.enwh : 0
+                },
+                battery_capacity_wh: summaryData.battery_capacity_wh || null,
+                last_report_at: telemetryData.meta ? telemetryData.meta.last_report_at : null,
+                devices_reporting: {
+                    charge: latestInterval.charge ? latestInterval.charge.devices_reporting : 0,
+                    discharge: latestInterval.discharge ? latestInterval.discharge.devices_reporting : 0
+                }
             };
 
             console.log("MMM-EnphaseBattery: Processed battery data:", batteryData);
