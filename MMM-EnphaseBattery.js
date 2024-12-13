@@ -74,6 +74,7 @@ Module.register("MMM-EnphaseBattery", {
     getDom: function() {
         const wrapper = document.createElement("div");
         wrapper.className = "MMM-EnphaseBattery";
+        wrapper.style.textAlign = "left";
 
         if (!this.loaded) {
             wrapper.innerHTML = "Loading battery data...";
@@ -89,35 +90,43 @@ Module.register("MMM-EnphaseBattery", {
         const container = document.createElement("div");
         container.className = "battery-container";
 
-        // Battery State of Charge
+        // Battery Status Line (includes icon, percentage, and charge status)
+        const statusLine = document.createElement("div");
+        statusLine.className = "battery-status-line";
+        statusLine.style.display = "flex";
+        statusLine.style.alignItems = "center";
+        statusLine.style.gap = "10px";
+
+        // Battery Icon and Percentage
         if (this.batteryData.battery_soc !== null) {
-            const soc = document.createElement("div");
-            soc.className = "battery-soc";
+            const batteryInfo = document.createElement("div");
+            batteryInfo.className = "battery-info";
             
-            // Add battery icon if enabled
             if (this.config.showBatteryIcon) {
                 const batteryLevel = Math.floor(this.batteryData.battery_soc / 20); // 0-5 levels
-                soc.innerHTML = `<span class="fa fa-battery-${batteryLevel}"></span> `;
+                batteryInfo.innerHTML = `<span class="fa fa-battery-${batteryLevel}"></span> ${this.batteryData.battery_soc}%`;
             }
             
-            soc.innerHTML += `${this.batteryData.battery_soc}%`;
-            container.appendChild(soc);
+            statusLine.appendChild(batteryInfo);
         }
 
-        // Battery Power
-        const power = document.createElement("div");
-        power.className = "battery-power";
+        // Charging Status with Icon
+        const powerStatus = document.createElement("div");
+        powerStatus.className = "power-status";
         
         if (this.batteryData.battery_power.charge > 0) {
-            power.innerHTML = `Charging: ${this.batteryData.battery_power.charge}Wh`;
+            powerStatus.innerHTML = `<span class="fas fa-bolt"></span> Charging: ${this.batteryData.battery_power.charge}Wh`;
         } else if (this.batteryData.battery_power.discharge > 0) {
-            power.innerHTML = `Discharging: ${this.batteryData.battery_power.discharge}Wh`;
+            powerStatus.innerHTML = `Discharging: ${this.batteryData.battery_power.discharge}Wh`;
         } else {
-            power.innerHTML = "Idle";
+            powerStatus.innerHTML = "Idle";
         }
-        container.appendChild(power);
+        statusLine.appendChild(powerStatus);
 
-        // Battery Capacity
+        // Add the status line to container
+        container.appendChild(statusLine);
+
+        // Battery Capacity (on new line)
         if (this.config.showCapacity && this.batteryData.battery_capacity_wh) {
             const capacity = document.createElement("div");
             capacity.className = "battery-capacity";
@@ -125,7 +134,7 @@ Module.register("MMM-EnphaseBattery", {
             container.appendChild(capacity);
         }
 
-        // Devices Reporting
+        // Devices Reporting (on new line)
         if (this.config.showDevicesReporting) {
             const devices = document.createElement("div");
             devices.className = "devices-reporting";
@@ -136,7 +145,7 @@ Module.register("MMM-EnphaseBattery", {
             container.appendChild(devices);
         }
 
-        // Last Update
+        // Last Update (on new line)
         if (this.config.showLastUpdate && this.batteryData.last_report_at) {
             const update = document.createElement("div");
             update.className = "battery-update";
@@ -151,7 +160,7 @@ Module.register("MMM-EnphaseBattery", {
 
     getStyles: function() {
         return [
-            'font-awesome.css',
+            'node_modules/@fortawesome/fontawesome-free/css/all.min.css',
             'MMM-EnphaseBattery.css'
         ];
     }

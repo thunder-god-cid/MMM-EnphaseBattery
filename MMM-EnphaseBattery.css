@@ -1,67 +1,28 @@
-/* MMM-EnphaseBattery/MMM-EnphaseBattery.css */
 .MMM-EnphaseBattery {
-    display: flex;
-    justify-content: center;
-    align-items: center;
     padding: 10px;
 }
 
 .battery-container {
     display: flex;
     flex-direction: column;
-    align-items: center;
     gap: 10px;
 }
 
-.battery-icon {
-    width: 40px;
-    height: 80px;
-    position: relative;
+.battery-status-line {
+    font-size: 1.1em;
 }
 
-.battery-shell {
-    width: 100%;
-    height: 100%;
-    border: 2px solid #fff;
-    border-radius: 5px;
-    position: relative;
-    overflow: hidden;
+.battery-info {
+    min-width: 80px;  /* Ensures consistent spacing */
 }
 
-.battery-level {
-    position: absolute;
-    bottom: 0;
-    width: 100%;
-    background-color: #fff;
-    transition: height 1s ease-in-out;
+.power-status .fa-bolt {
+    color: #FFD700;  /* Gold color for the lightning bolt */
 }
 
-.battery-level.high {
-    background-color: #4CAF50;
-}
-
-.battery-level.medium {
-    background-color: #FFC107;
-}
-
-.battery-level.low {
-    background-color: #F44336;
-}
-
-.battery-percentage {
-    font-size: 1.5em;
-    font-weight: bold;
-}
-
-.battery-status {
-    font-size: 1em;
-}
-
-.battery-status.warning {
-    color: #F44336;
-}
-
+.battery-capacity,
+.devices-reporting,
 .battery-update {
-    font-size: 0.8em;
-    opacity: 0.7;
+    font-size: 0.9em;
+    opacity: 0.8;
 }
