@@ -1,0 +1,19 @@
+{
+  "name": "MMM-EnphaseBattery",
+  "version": "1.0.0",
+  "description": "Magic Mirror Module for displaying Enphase battery status",
+  "main": "MMM-EnphaseBattery.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [
+    "magicmirror",
+    "enphase",
+    "battery"
+  ],
+  "author": "Your Name",
+  "license": "MIT",
+  "dependencies": {
+    "axios": "^0.27.2"
+  }
+}
