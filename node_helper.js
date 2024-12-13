@@ -11,12 +11,37 @@ module.exports = NodeHelper.create({
         console.log("MMM-EnphaseBattery: Node helper received notification:", notification);
         
         if (notification === "ENPHASE_CONFIG") {
+            console.log("MMM-EnphaseBattery: Received config:", JSON.stringify(payload));
+            
+            // Validate configuration
+            if (!payload) {
+                console.error("MMM-EnphaseBattery: Received empty configuration");
+                return;
+            }
+            
+            if (!payload.apiKey || !payload.accessToken || !payload.systemId) {
+                console.error("MMM-EnphaseBattery: Missing required configuration fields:", {
+                    hasApiKey: !!payload.apiKey,
+                    hasAccessToken: !!payload.accessToken,
+                    hasSystemId: !!payload.systemId
+                });
+                this.sendSocketNotification("BATTERY_DATA", {
+                    error: "Missing required configuration (apiKey, accessToken, or systemId)"
+                });
+                return;
+            }
+            
             this.config = payload;
+            console.log("MMM-EnphaseBattery: Configuration stored successfully");
+            
+            // Immediately fetch initial data
+            this.fetchBatteryData();
+            
         } else if (notification === "GET_BATTERY_DATA") {
             if (!this.config) {
-                console.error("MMM-EnphaseBattery: No configuration available");
+                console.error("MMM-EnphaseBattery: No configuration available. Current config state:", this.config);
                 this.sendSocketNotification("BATTERY_DATA", { 
-                    error: "Module not configured" 
+                    error: "Module not configured - please check your config.js" 
                 });
                 return;
             }
@@ -26,6 +51,12 @@ module.exports = NodeHelper.create({
 
     fetchBatteryData: async function() {
         try {
+            console.log("MMM-EnphaseBattery: Fetching battery data with config:", {
+                systemId: this.config.systemId,
+                hasApiKey: !!this.config.apiKey,
+                hasAccessToken: !!this.config.accessToken
+            });
+
             // Get battery telemetry data
             const telemetryUrl = `https://api.enphaseenergy.com/api/v4/systems/${this.config.systemId}/telemetry/battery`;
             console.log("MMM-EnphaseBattery: Making telemetry API request to:", telemetryUrl);
@@ -37,7 +68,7 @@ module.exports = NodeHelper.create({
                     'key': this.config.apiKey
                 },
                 params: {
-                    granularity: 'day'  // Get latest day's data
+                    granularity: 'day'
                 }
             });
 
@@ -52,6 +83,9 @@ module.exports = NodeHelper.create({
                     'key': this.config.apiKey
                 }
             });
+
+            console.log("MMM-EnphaseBattery: Received telemetry response:", JSON.stringify(telemetryResponse.data));
+            console.log("MMM-EnphaseBattery: Received summary response:", JSON.stringify(summaryResponse.data));
 
             // Process the telemetry data
             const telemetryData = telemetryResponse.data;
@@ -74,7 +108,7 @@ module.exports = NodeHelper.create({
                 }
             };
 
-            console.log("MMM-EnphaseBattery: Processed battery data:", batteryData);
+            console.log("MMM-EnphaseBattery: Processed battery data:", JSON.stringify(batteryData));
             this.sendSocketNotification("BATTERY_DATA", batteryData);
 
         } catch (error) {
@@ -83,20 +117,21 @@ module.exports = NodeHelper.create({
                 response: error.response ? {
                     status: error.response.status,
                     data: error.response.data
-                } : 'No response'
+                } : 'No response',
+                config: error.config
             });
 
             let errorMessage = "API Error";
             if (error.response) {
                 switch (error.response.status) {
                     case 401:
-                        errorMessage = "Invalid API credentials";
+                        errorMessage = "Invalid API credentials - check your apiKey and accessToken";
                         break;
                     case 403:
                         errorMessage = "Access forbidden - check API permissions";
                         break;
                     case 404:
-                        errorMessage = "System ID not found";
+                        errorMessage = "System ID not found - check your systemId";
                         break;
                     case 422:
                         errorMessage = "Invalid parameters - check system configuration";
